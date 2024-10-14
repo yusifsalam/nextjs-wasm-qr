@@ -1,59 +1,95 @@
 "use client";
 
-import init, { ECL, generate, Mask, Mode, QrOptions, Version } from "fuqr";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import init, { ECL } from "fuqr";
 import { params, renderSVG } from "./lib";
-import { useEffect, useState } from "react";
-type InputQr = {
-  text: string;
-  minVersion: number;
-  strictVersion: boolean;
-  minEcl: ECL;
-  strictEcl: boolean;
-  mode: Mode | null;
-  mask: Mask | null;
-};
-const generateOutputQr = (inputQr: InputQr) => {
-  const qrOptions = new QrOptions()
-    .min_version(new Version(inputQr.minVersion))
-    .strict_version(inputQr.strictVersion)
-    .min_ecl(inputQr.minEcl)
-    .strict_ecl(inputQr.strictEcl)
-    .mask(inputQr.mask!) // null instead of undefined (wasm-pack type)
-    .mode(inputQr.mode!); // null instead of undefined (wasm-pack type)
-  return {
-    text: inputQr.text,
-    ...generate(inputQr.text, qrOptions),
-  };
-};
+import { InputQr } from "./types";
+import { generateOutputQr } from "./utils";
 
-const Client = ({ text }: { text: string }) => {
+const Client = () => {
   const [svg, setSvg] = useState<string | null>(null);
+  const [inputText, setInputText] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
-    const initialized = async () => {
+    const text = searchParams.get("text") || "";
+    setInputText(text);
+  }, [searchParams]);
+
+  const updateURL = useCallback(
+    (text: string) => {
+      const newSearchParams = new URLSearchParams(searchParams.toString());
+      if (text) {
+        newSearchParams.set("text", text);
+      } else {
+        newSearchParams.delete("text");
+      }
+      router.push(`?${newSearchParams.toString()}`, { scroll: false });
+    },
+    [searchParams, router]
+  );
+
+  useEffect(() => {
+    const generateQR = async () => {
+      if (!inputText) {
+        setSvg(null);
+        return;
+      }
+
       await init();
+
+      const inputQr: InputQr = {
+        text: inputText,
+        minVersion: 1,
+        strictVersion: false,
+        minEcl: ECL.Low,
+        strictEcl: false,
+        mode: null,
+        mask: null,
+      };
+
       const outputQr = generateOutputQr(inputQr);
       const outputSvg = renderSVG(outputQr, params);
       setSvg(outputSvg);
     };
-    initialized();
-    const inputQr: InputQr = {
-      text,
-      minVersion: 1,
-      strictVersion: false,
-      minEcl: ECL.Low,
-      strictEcl: false,
-      mode: null,
-      mask: null,
-    };
-  }, [setSvg, text]);
+
+    generateQR();
+    updateURL(inputText);
+  }, [inputText, updateURL]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newText = e.target.value;
+    setInputText(newText);
+  };
 
   return (
-    <>
-      {svg && (
+    <div>
+      <div>
+        {inputText === ""
+          ? "Start typing to generate QR"
+          : `QR content: ${inputText}`}
+      </div>
+      <input
+        type="text"
+        autoComplete="off"
+        value={inputText}
+        maxLength={50}
+        onChange={handleInputChange}
+        placeholder="Enter text for QR code"
+        className="w-full p-2 mb-4 border border-gray-300 rounded text-black"
+      />
+      {svg ? (
         <div className="h-80 w-80" dangerouslySetInnerHTML={{ __html: svg }} />
+      ) : (
+        <>
+          <div className="relative h-80 w-80 bg-slate-300/50 overflow-hidden">
+            <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          </div>
+        </>
       )}
-    </>
+    </div>
   );
 };
 

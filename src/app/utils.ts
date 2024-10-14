@@ -1,3 +1,6 @@
+import { generate, QrOptions, Version } from "fuqr";
+import { InputQr } from "./types";
+
 export const Module = Object.freeze({
   ON: 1 << 0,
   DATA: 1 << 1,
@@ -21,3 +24,17 @@ function splitmix32(a: number) {
   };
 }
 export { splitmix32 as getSeededRand };
+
+export const generateOutputQr = (inputQr: InputQr) => {
+  const qrOptions = new QrOptions()
+    .min_version(new Version(inputQr.minVersion))
+    .strict_version(inputQr.strictVersion)
+    .min_ecl(inputQr.minEcl)
+    .strict_ecl(inputQr.strictEcl)
+    .mask(inputQr.mask!) // null instead of undefined (wasm-pack type)
+    .mode(inputQr.mode!); // null instead of undefined (wasm-pack type)
+  return {
+    text: inputQr.text,
+    ...generate(inputQr.text, qrOptions),
+  };
+};
